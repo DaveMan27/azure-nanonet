@@ -24,8 +24,6 @@ namespace Company.Function
 
         private const string AllowedOrigin = "*";
 
-               //private ILogger log;
-
         [Function("HttpTrigger1")]
         public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req, 
         FunctionContext executionContext)
@@ -51,8 +49,10 @@ namespace Company.Function
 
                 if (string.IsNullOrEmpty(imageUrl))
                 {
-                    Console.WriteLine("The imageUrl cannot be null or empty.");
-                    throw new ArgumentException("Please ensure that imageURL has been passed to the function");
+                    log.LogError("The imageUrl cannot be null or empty.");
+                    //throw new ArgumentException("Please ensure that imageURL has been passed to the function");
+                    return new BadRequestObjectResult("Invalid or missing URL");
+
                 }
 
 
@@ -66,15 +66,6 @@ namespace Company.Function
 
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(apiKey)));
-
-                /*var content = new MultipartFormDataContent
-                {
-                    { new StringContent(imageUrl), "urls" }
-                };
-                var request = new HttpRequestMessage(HttpMethod.Post, apiUrl)
-                {
-                    Content = content
-                };*/
 
                 var formData = new Dictionary<string, string> { { "urls", imageUrl } };
                 var request = new HttpRequestMessage(HttpMethod.Post, apiUrl)
@@ -94,7 +85,7 @@ namespace Company.Function
                 {
                     log.LogError($"OCR request failed with status code {response.StatusCode}");
                     //return new ObjectResult(response.ReasonPhrase) { StatusCode = (int)response.StatusCode };
-                    return new ObjectResult(response);
+                    return new BadRequestObjectResult(response.ReasonPhrase);
                 }
             }
             catch (Exception ex)
