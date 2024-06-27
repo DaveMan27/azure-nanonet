@@ -22,6 +22,11 @@ namespace Company.Function
             { "visa", "7e3880cd-aa0d-488f-8e72-767ac1abad54" }
         };
 
+        private class ReturnedResponse {
+            public string responseMessage { get; set; }
+            public int responseCode { get; set; }
+        }
+
         private const string AllowedOrigin = "*";
 
         [Function("HttpTrigger1")]
@@ -36,10 +41,12 @@ namespace Company.Function
                 dynamic data = JsonConvert.DeserializeObject(requestBody);
                 string modelType;
                 string imageUrl;
+                ReturnedResponse rr = new ReturnedResponse();
+
 
                 if (data == null)
                 {
-                    throw new ArgumentException("Please ensure that data has been passed to the function");
+                    return new BadRequestObjectResult("Ensure that data has been passed to the function");
                 }
                 else
                 {
@@ -50,8 +57,12 @@ namespace Company.Function
                 if (string.IsNullOrEmpty(imageUrl))
                 {
                     log.LogError("The imageUrl cannot be null or empty.");
-                    //throw new ArgumentException("Please ensure that imageURL has been passed to the function");
-                    return new BadRequestObjectResult("Invalid or missing URL");
+
+                    rr.responseMessage = "Invalid or missing URL";
+                    rr.responseCode = 400;
+                        //throw new ArgumentException("Please ensure that imageURL has been passed to the function");
+                        //return new BadRequestObjectResult("Invalid or missing URL");
+                    return new BadRequestObjectResult(rr);                   
 
                 }
 
@@ -61,7 +72,9 @@ namespace Company.Function
                 if (string.IsNullOrWhiteSpace(modelType) || !modelTypeMap.ContainsKey(modelType))
                 {
                     log.LogError("Invalid or missing model type.");
-                    return new BadRequestObjectResult("Invalid or missing model type.");
+                    rr.responseMessage = "Invalid or missing model type.";
+                    rr.responseCode    = 400;
+                    return new BadRequestObjectResult(rr);
                 }
 
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
@@ -104,5 +117,3 @@ namespace Company.Function
         }
     }
 }
-
-
