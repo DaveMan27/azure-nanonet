@@ -1,16 +1,18 @@
-using System.Net.Http;
+//using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System;
-using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.AspNetCore.Http;
+//using System.Threading.Tasks;
+//using System.Collections.Generic;
+//using System.IO;
 
 namespace Company.Function
 {
+
     public class HttpTrigger1
     {
         private static readonly HttpClient client = new HttpClient();
@@ -22,65 +24,50 @@ namespace Company.Function
             { "visa", "7e3880cd-aa0d-488f-8e72-767ac1abad54" }
         };
 
-        private class ReturnedResponse {
-            public string responseMessage { get; set; }
-            public int responseCode { get; set; }
+        private class ReturnedResponse
+        {
+            public string ResponseMessage { get; set; }
+            public int ResponseCode { get; set; }
         }
 
         private const string AllowedOrigin = "*";
 
         [Function("HttpTrigger1")]
-        public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req, 
+        public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
         FunctionContext executionContext)
         {
             var log = executionContext.GetLogger("HttpTrigger1");
+            ReturnedResponse rr = new ReturnedResponse();
             try
             {
                 SetCorsHeaders(req.HttpContext.Response);
                 string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
                 dynamic data = JsonConvert.DeserializeObject(requestBody);
-                string modelType;
-                string imageUrl;
-                ReturnedResponse rr = new ReturnedResponse();
+                string? modelType = data?.modelType;
+                string? imageBase64 = data?.imageBase64;
 
 
-                if (data == null)
+                if (string.IsNullOrEmpty(modelType) || string.IsNullOrEmpty(imageBase64))
                 {
-                    return new BadRequestObjectResult("Ensure that data has been passed to the function");
-                }
-                else
-                {
-                    modelType = data?.modelType;
-                    imageUrl = data?.imageUrl;
+                    rr.ResponseMessage = "Ensure that valid data has been passed to the function";
+                    rr.ResponseCode = 400;
+                    return new BadRequestObjectResult(rr);
                 }
 
-                if (string.IsNullOrEmpty(imageUrl))
+                log.LogInformation($"{modelType} : {imageBase64}");
+
+                if (!modelTypeMap.ContainsKey(modelType))
                 {
-                    log.LogError("The imageUrl cannot be null or empty.");
-
-                    rr.responseMessage = "Invalid or missing URL";
-                    rr.responseCode = 400;
-                        //throw new ArgumentException("Please ensure that imageURL has been passed to the function");
-                        //return new BadRequestObjectResult("Invalid or missing URL");
-                    return new BadRequestObjectResult(rr);                   
-
-                }
-
-
-                log.LogInformation("" + modelType + " : " + imageUrl);
-
-                if (string.IsNullOrWhiteSpace(modelType) || !modelTypeMap.ContainsKey(modelType))
-                {
-                    log.LogError("Invalid or missing model type.");
-                    rr.responseMessage = "Invalid or missing model type.";
-                    rr.responseCode    = 400;
+                    rr.ResponseMessage = "Invalid or missing model type.";
+                    rr.ResponseCode = 400;
                     return new BadRequestObjectResult(rr);
                 }
 
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(apiKey)));
 
-                var formData = new Dictionary<string, string> { { "urls", imageUrl } };
+                var formData = new Dictionary<string, string> { { "base64_data", imageBase64 } };
+
                 var request = new HttpRequestMessage(HttpMethod.Post, apiUrl)
                 {
                     Content = new FormUrlEncodedContent(formData)
@@ -97,23 +84,25 @@ namespace Company.Function
                 else
                 {
                     log.LogError($"OCR request failed with status code {response.StatusCode}");
-                    //return new ObjectResult(response.ReasonPhrase) { StatusCode = (int)response.StatusCode };
-                    return new BadRequestObjectResult(response.ReasonPhrase);
+                    rr.ResponseMessage = response.ReasonPhrase;
+                    rr.ResponseCode = (int)response.StatusCode;
+                    return new BadRequestObjectResult(rr);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("" + ex, "An error occurred while processing the request.");
-                return new ObjectResult("" + ex);
+                log.LogError(ex, "An error occurred while processing the request.");
+                rr.ResponseMessage = ex.Message;
+                rr.ResponseCode = 500;
+                return new ObjectResult(rr) { StatusCode = 500 };
             }
         }
 
         private static void SetCorsHeaders(HttpResponse response)
         {
-            // Add CORS headers to the response
             response.Headers.Add("Access-Control-Allow-Origin", AllowedOrigin);
-            response.Headers.Add("Access-Control-Allow-Methods", "POST"); // Add the allowed methods.
-            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization"); // Add the allowed headers.            
+            response.Headers.Add("Access-Control-Allow-Methods", "POST");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
         }
     }
 }
