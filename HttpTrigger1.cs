@@ -41,9 +41,9 @@ namespace Company.Function
             try
             {
                 SetCorsHeaders(req.HttpContext.Response);
-                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                dynamic data = JsonConvert.DeserializeObject(requestBody);
-                string? modelType = data?.modelType;
+                string  requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                dynamic data        = JsonConvert.DeserializeObject(requestBody);
+                string? modelType   = data?.modelType;
                 string? imageBase64 = data?.imageBase64;
 
 
