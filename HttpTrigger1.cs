@@ -1,4 +1,4 @@
-//using System.Net.Http;
+using System;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +8,9 @@ using Newtonsoft.Json;
 using Microsoft.AspNetCore.Http;
 //using System.Threading.Tasks;
 //using System.Collections.Generic;
-//using System.IO;
+using System.IO;
+//using System.Text.Json;
+
 
 namespace Company.Function
 {
@@ -23,6 +25,11 @@ namespace Company.Function
             { "BL", "bae0ec8b-10ad-4809-9345-e4b2c2922852" },
             { "visa", "7e3880cd-aa0d-488f-8e72-767ac1abad54" }
         };
+
+        private class ConfigData
+        {
+            public string ApiKey { get; set; }
+        }
 
         private class ReturnedResponse
         {
@@ -40,10 +47,22 @@ namespace Company.Function
             ReturnedResponse rr = new ReturnedResponse();
             try
             {
+                string jsonFilePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+                if (!File.Exists(jsonFilePath))
+                {
+                    Console.WriteLine($"File not found: {jsonFilePath}");
+                    log.LogInformation($"File not found: {jsonFilePath}");
+                }
+
+                string jsonString = File.ReadAllText(jsonFilePath);
+                ConfigData config = JsonConvert.DeserializeObject<ConfigData>(jsonString);
+                log.LogInformation(config + "");
+
+
                 SetCorsHeaders(req.HttpContext.Response);
-                string  requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                dynamic data        = JsonConvert.DeserializeObject(requestBody);
-                string? modelType   = data?.modelType;
+                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                dynamic data = JsonConvert.DeserializeObject(requestBody);
+                string? modelType = data?.modelType;
                 string? imageBase64 = data?.imageBase64;
 
 
@@ -64,7 +83,7 @@ namespace Company.Function
                 }
 
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(apiKey)));
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(config.ApiKey)));
 
                 var formData = new Dictionary<string, string> { { "base64_data", imageBase64 } };
 
