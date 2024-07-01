@@ -1,4 +1,3 @@
-using System;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
@@ -6,16 +5,8 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.AspNetCore.Http;
-//using System.Threading.Tasks;
-//using System.Collections.Generic;
-using System.IO;
-using System.Runtime.InteropServices;
-//using System.Text.Json;
-using System;
-using System.Threading.Tasks;
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
-
 
 namespace Company.Function
 {
@@ -23,19 +14,12 @@ namespace Company.Function
     public class HttpTrigger1
     {
         private static readonly HttpClient client = new HttpClient();
-        //private static readonly string apiKey = "191abf3c-12c5-11ef-bf2f-7e572644319b:";
         private static readonly Dictionary<string, string> modelTypeMap = new Dictionary<string, string>
         {
             { "receipts", "73e82f7d-38dd-4c4e-b6b7-b89b4743130a" },
             { "BL", "bae0ec8b-10ad-4809-9345-e4b2c2922852" },
             { "visa", "7e3880cd-aa0d-488f-8e72-767ac1abad54" }
         };
-
-        /*public class ConfigData
-        {
-            public string ApiKey { get; set; }
-        }*/
-
         private class ReturnedResponse
         {
             public string ResponseMessage { get; set; }
@@ -51,20 +35,9 @@ namespace Company.Function
 
             var log = executionContext.GetLogger("HttpTrigger1");
 
-
-
             ReturnedResponse rr = new ReturnedResponse();
             try
             {
-                /*string jsonFilePath = Path.Combine(AppContext.BaseDirectory, "config.json");
-                if (!File.Exists(jsonFilePath))
-                {
-                    log.LogInformation($"File not found: {jsonFilePath}");
-                }
-
-                string jsonString = File.ReadAllText(jsonFilePath);
-                ConfigData config = JsonConvert.DeserializeObject<ConfigData>(jsonString);*/
-
                 //Retreive data from trigger request
                 SetCorsHeaders(req.HttpContext.Response);
                 string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
@@ -103,19 +76,17 @@ namespace Company.Function
                     return new BadRequestObjectResult(rr);
                 }
 
-
+                //Callout to Nanonet
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(apiKey)));
-
                 var formData = new Dictionary<string, string> { { "base64_data", imageBase64 } };
-
                 var request = new HttpRequestMessage(HttpMethod.Post, apiUrl)
                 {
                     Content = new FormUrlEncodedContent(formData)
                 };
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/form-data"));
-
                 HttpResponseMessage response = await client.SendAsync(request);
+
                 if (response.IsSuccessStatusCode)
                 {
                     var result = await response.Content.ReadAsStringAsync();
