@@ -9,7 +9,12 @@ using Microsoft.AspNetCore.Http;
 //using System.Threading.Tasks;
 //using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 //using System.Text.Json;
+using System;
+using System.Threading.Tasks;
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 
 
 namespace Company.Function
@@ -18,7 +23,7 @@ namespace Company.Function
     public class HttpTrigger1
     {
         private static readonly HttpClient client = new HttpClient();
-        private static readonly string apiKey = "191abf3c-12c5-11ef-bf2f-7e572644319b:";
+        //private static readonly string apiKey = "191abf3c-12c5-11ef-bf2f-7e572644319b:";
         private static readonly Dictionary<string, string> modelTypeMap = new Dictionary<string, string>
         {
             { "receipts", "73e82f7d-38dd-4c4e-b6b7-b89b4743130a" },
@@ -26,10 +31,10 @@ namespace Company.Function
             { "visa", "7e3880cd-aa0d-488f-8e72-767ac1abad54" }
         };
 
-        private class ConfigData
+        /*public class ConfigData
         {
             public string ApiKey { get; set; }
-        }
+        }*/
 
         private class ReturnedResponse
         {
@@ -43,28 +48,37 @@ namespace Company.Function
         public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
         FunctionContext executionContext)
         {
+
             var log = executionContext.GetLogger("HttpTrigger1");
+
+
+
             ReturnedResponse rr = new ReturnedResponse();
             try
             {
-                string jsonFilePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+                /*string jsonFilePath = Path.Combine(AppContext.BaseDirectory, "config.json");
                 if (!File.Exists(jsonFilePath))
                 {
-                    Console.WriteLine($"File not found: {jsonFilePath}");
                     log.LogInformation($"File not found: {jsonFilePath}");
                 }
 
                 string jsonString = File.ReadAllText(jsonFilePath);
-                ConfigData config = JsonConvert.DeserializeObject<ConfigData>(jsonString);
-                log.LogInformation(config + "");
+                ConfigData config = JsonConvert.DeserializeObject<ConfigData>(jsonString);*/
 
-
+                //Retreive data from trigger request
                 SetCorsHeaders(req.HttpContext.Response);
                 string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
                 dynamic data = JsonConvert.DeserializeObject(requestBody);
                 string? modelType = data?.modelType;
                 string? imageBase64 = data?.imageBase64;
 
+                //Retrieve secret from vault
+                const string secretName = "Nanonet";
+                var keyVaultName = "jafi-eu-crm-kv";
+                var kvUri = $"https://{keyVaultName}.vault.azure.net";
+                var clientSecretRetrieval = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                var secret = await clientSecretRetrieval.GetSecretAsync(secretName);
+                string apiKey = secret.Value.Value.ToString();
 
                 if (string.IsNullOrEmpty(modelType) || string.IsNullOrEmpty(imageBase64))
                 {
@@ -82,8 +96,16 @@ namespace Company.Function
                     return new BadRequestObjectResult(rr);
                 }
 
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    rr.ResponseMessage = "Invalid API authorization";
+                    rr.ResponseCode = 401;
+                    return new BadRequestObjectResult(rr);
+                }
+
+
                 string apiUrl = $"https://eu-open.nanonets.com/api/v2/OCR/Model/{modelTypeMap[modelType]}/LabelUrls/?async=false";
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(config.ApiKey)));
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.Default.GetBytes(apiKey)));
 
                 var formData = new Dictionary<string, string> { { "base64_data", imageBase64 } };
 
